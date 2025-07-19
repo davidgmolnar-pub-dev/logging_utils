@@ -1,73 +1,84 @@
 import 'dart:async';
-import 'dart:io';
 
-Logger logging = Logger(loggerName: "ROOT", sink: LoggerSink(), onLog: null);
+import 'package:logging_utils/src/log_entry.dart';
+import 'package:logging_utils/src/logger_sink.dart';
 
-enum LogLevel{
-  // ignore: constant_identifier_names
-  INFO,
-  // ignore: constant_identifier_names
-  WARNING,
-  // ignore: constant_identifier_names
-  ERROR,
-  // ignore: constant_identifier_names
-  CRITICAL
-}
-
-class LogEntry{
-  final String message;
-  final LogLevel level;
-  final DateTime timeStamp;
-
-  const LogEntry(this.message, this.level, this.timeStamp);
-
-  static LogEntry info(final String message){
-    return LogEntry(message, LogLevel.INFO, DateTime.now());
-  }
-
-  static LogEntry warning(final String message){
-    return LogEntry(message, LogLevel.WARNING, DateTime.now());
-  }
-
-  static LogEntry error(final String message){
-    return LogEntry(message, LogLevel.ERROR, DateTime.now());
-  }
-
-  static LogEntry critical(final String message){
-    return LogEntry(message, LogLevel.CRITICAL, DateTime.now());
-  }
-
-  String asString(final String loggerName) => "[$timeStamp] [$loggerName - ${level.name.toUpperCase()}] $message";
-}
-
-class LoggerSink{
-
-}
+Logger logging = Logger(loggerName: "ROOT", sink: ConsoleSink(), loggerCallback: null);
 
 class Logger{
   List<LogEntry> _buffer = [];
   bool _isActive = false;
-  Timer? timer;
-  int loggerFlushIntervalMS = 1000;
-  final LoggerSink sink;
-  final String loggerName;
-  final void Function(LogEntry)? onLog;
+  Timer? _timer;
+  LoggerSink _sink;
+  String _loggerName;
+  void Function(LogEntry)? _loggerCallback;
+  int _flushInterval = 1000;
+  LogLevel _sinkLevel = LogLevel.WARNING;
 
-  Logger({required this.loggerName, required this.sink, required this.onLog});
+  Logger({required String loggerName, required LoggerSink sink, required void Function(LogEntry)? loggerCallback}) : _loggerCallback = loggerCallback, _sink = sink, _loggerName = loggerName;
+
+  void setFlushInterval(final int intervalMs) async {
+    _flushInterval = intervalMs;
+    if(_isActive){
+      await stop();
+      start();
+    }
+  }
+
+  void setLoggerSink(final LoggerSink sink) async {
+    final bool wasActive = _isActive;
+    if(_isActive){
+      await stop();
+    }
+    _sink = sink;
+    if(wasActive){
+      start();
+    }
+  }
+
+  void setLoggerName(final String loggerName) async {
+    final bool wasActive = _isActive;
+    if(_isActive){
+      await stop();
+    }
+    _loggerName = loggerName;
+    if(wasActive){
+      start();
+    }
+  }
+
+    void setLoggerSinkLevel(final LogLevel level) async {
+    final bool wasActive = _isActive;
+    if(_isActive){
+      await stop();
+    }
+    _sinkLevel = level;
+    if(wasActive){
+      start();
+    }
+  }
+
+  void setLoggerCallback(final void Function(LogEntry)? loggerCallback) async {
+    final bool wasActive = _isActive;
+    if(_isActive){
+      await stop();
+    }
+    _loggerCallback = loggerCallback;
+    if(wasActive){
+      start();
+    }
+  }
 
   void start(){
     if(_isActive){
       return;
     }
 
-    final File logFile = File(logPath);
-    if(logFile.existsSync()){
-      logFile.deleteSync();
-    }
+    _sink.start();
 
     _isActive = true;
-    timer = Timer.periodic(Duration(milliseconds: loggerFlushIntervalMS), ((timer) async {
-      await __flush();
+    _timer = Timer.periodic(Duration(milliseconds: _flushInterval), ((timer) async {
+      await _flush();
     }));
   }
 
@@ -76,20 +87,20 @@ class Logger{
       return;
     }
     _isActive = false;
-    timer?.cancel();
-    await __flush();
+    _timer?.cancel();
+    await _flush();
   }
 
-  void __sleep(){
-    timer?.cancel();
+  void _sleep(){
+    _timer?.cancel();
   }
 
-  void __wake(){
-    if(timer?.isActive ?? false){
+  void _wake(){
+    if(_timer?.isActive ?? false){
       return;
     }
-    timer = Timer.periodic(Duration(milliseconds: loggerFlushIntervalMS), ((timer) async {
-      await __flush();
+    _timer = Timer.periodic(Duration(milliseconds: _flushInterval), ((timer) async {
+      await _flush();
     }));
   }
 
@@ -124,38 +135,26 @@ class Logger{
   void addAll(final List<LogEntry> entries){
     _buffer.addAll(entries);
     if(entries.isNotEmpty){
-      __wake();
+      _wake();
     }
   }
 
   void add(final LogEntry entry){
     _buffer.add(entry);
-    __wake();
-    
+    _wake();
+    if(_loggerCallback != null){
+      _loggerCallback!(entry);
+    }
   }
 
-  Future<void> __flush() async {
+  Future<void> _flush() async {
     if(_buffer.isEmpty){
-      __sleep();
+      _sleep();
       return;
     }
 
-    final File logFile = File(logPath);
-    if(!await logFile.exists()){
-      await logFile.create(recursive: true);
-    }
-    final RandomAccessFile access = await logFile.open(mode: FileMode.append);
     final List<LogEntry> copy = _buffer;
-    await access.writeString(__contentsToString(copy));
+    await _sink.flush(copy.where((e) => e.level.index >= _sinkLevel.index).toList(), _loggerName);
     _buffer = _buffer.skip(copy.length).toList();
-    await access.close();
-  }
-
-  String __contentsToString(final List<LogEntry> data){
-    String str = "";
-    for(LogEntry line in data){
-      str = "$str[${line.timeStamp}] [$loggerName - ${line.level.name.toUpperCase()}] ${line.message}\n";
-    }
-    return str;
   }
 }
