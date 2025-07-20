@@ -2,73 +2,93 @@ import 'dart:io';
 
 import 'package:logging_utils/src/log_entry.dart';
 
-enum FileSinkStartBehavior{
+/// Specifies whether [LoggerSink] instances that - among others - log to a file, should clear the file on [LoggerSink.start]
+enum FileSinkStartBehavior {
   // ignore: constant_identifier_names
   CLEAR,
   // ignore: constant_identifier_names
   KEEP
 }
 
-abstract class LoggerSink{
-  Future<void> flush(final List<LogEntry> entries, final String loggerName);
+/// Base class of all [LoggerSink] derivatives to enforce [LoggerSink.flush] and [LoggerSink.start] to exist.
+abstract class LoggerSink {
+  Future<void> flush(final List<LogEntry> entries, final String loggerName,
+      final DateTimeFMT fmt);
   void start();
 }
 
-class ConsoleSink extends LoggerSink{
+/// A [LoggerSink] that logs to the terminal
+class ConsoleSink extends LoggerSink {
+  /// Flushes all received [LogEntry] instances to the terminal
   @override
-  Future<void> flush(final List<LogEntry> entries, final String loggerName) async {
-    print(entries.map((e) => e.asString(loggerName)).join("\n"));
+  Future<void> flush(final List<LogEntry> entries, final String loggerName,
+      final DateTimeFMT fmt) async {
+    print(entries.map((e) => e.asString(loggerName, fmt)).join("\n"));
   }
 
+  /// No startup behavior for a [ConsoleSink]
   @override
   void start() {}
 }
 
-class FileSink extends LoggerSink{
+/// A [LoggerSink] that logs a file
+class FileSink extends LoggerSink {
+  /// The file path of the log
   final String filename;
+
+  /// Specifies whether the [FileSink] should clear the file on [FileSink.start]
   final FileSinkStartBehavior behavior;
 
   FileSink({required this.filename, required this.behavior});
 
+  /// Flushes all received [LogEntry] instances to the logfile
   @override
-  Future<void> flush(final List<LogEntry> entries, final String loggerName) async {
+  Future<void> flush(final List<LogEntry> entries, final String loggerName,
+      final DateTimeFMT fmt) async {
     final File logFile = File(filename);
-    if(!await logFile.exists()){
+    if (!await logFile.exists()) {
       await logFile.create(recursive: true);
     }
 
     final RandomAccessFile access = await logFile.open(mode: FileMode.append);
     await access.writeString(
-      entries.map((e) => e.asString(loggerName)).join("\n")
-    );
+        entries.map((e) => e.asString(loggerName, fmt)).join("\n"));
     await access.close();
   }
 
+  /// Depending on [behavior] it clears the logfile if it already exists
   @override
   void start() {
-    if(behavior == FileSinkStartBehavior.CLEAR){
+    if (behavior == FileSinkStartBehavior.CLEAR) {
       final File logFile = File(filename);
-      if(logFile.existsSync()){
+      if (logFile.existsSync()) {
         logFile.deleteSync();
       }
     }
   }
 }
 
-class ConsoleAndFileSink extends LoggerSink{
+/// A [LoggerSink] that logs to both the terminal and a file
+class ConsoleAndFileSink extends LoggerSink {
+  /// The file path of the log
   final String filename;
+
+  /// Specifies whether the [ConsoleAndFileSink] should clear the file on [ConsoleAndFileSink.start]
   final FileSinkStartBehavior behavior;
 
   ConsoleAndFileSink({required this.filename, required this.behavior});
-  
+
+  /// Flushes all received [LogEntry] instances to the logfile and the terminal
   @override
-  Future<void> flush(final List<LogEntry> entries, final String loggerName) async {
+  Future<void> flush(final List<LogEntry> entries, final String loggerName,
+      final DateTimeFMT fmt) async {
     final File logFile = File(filename);
-    if(!await logFile.exists()){
+    if (!await logFile.exists()) {
       await logFile.create(recursive: true);
     }
 
-    final String buf = entries.map((e) => e.asString(loggerName)).join("\n");
+    final String buf =
+        entries.map((e) => e.asString(loggerName, fmt)).join("\n");
     print(buf);
 
     final RandomAccessFile access = await logFile.open(mode: FileMode.append);
@@ -76,28 +96,36 @@ class ConsoleAndFileSink extends LoggerSink{
     await access.close();
   }
 
+  /// Depending on [behavior] it clears the logfile if it already exists
   @override
   void start() {
-    if(behavior == FileSinkStartBehavior.CLEAR){
+    if (behavior == FileSinkStartBehavior.CLEAR) {
       final File logFile = File(filename);
-      if(logFile.existsSync()){
+      if (logFile.existsSync()) {
         logFile.deleteSync();
       }
     }
   }
 }
 
-class CustomSink extends LoggerSink{
+/// A user implemented [LoggerSink] that eg. could be used to send the [LogEntry] representations to a remote logging server
+class CustomSink extends LoggerSink {
+  /// User defined startup behavior
   final void Function() startImpl;
-  final void Function(List<LogEntry>, String) flushImpl;
+
+  /// User defined flush behavior
+  final void Function(List<LogEntry>, String, DateTimeFMT) flushImpl;
 
   CustomSink({required this.startImpl, required this.flushImpl});
 
+  /// Flushes all received [LogEntry] instances using the user supplied flush behavior
   @override
-  Future<void> flush(final List<LogEntry> entries, final String loggerName) async {
-    flushImpl(entries, loggerName);
+  Future<void> flush(final List<LogEntry> entries, final String loggerName,
+      final DateTimeFMT fmt) async {
+    flushImpl(entries, loggerName, fmt);
   }
 
+  /// Runs the user supplied startup behavior
   @override
   void start() {
     startImpl();
