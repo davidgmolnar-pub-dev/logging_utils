@@ -1,39 +1,44 @@
-<!-- 
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+[![Pub](https://img.shields.io/pub/v/logging_utils.svg)](https://pub.dev/packages/logging_utils)
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/guides/libraries/writing-package-pages). 
-
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-library-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/developing-packages). 
--->
-
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+A package for logging with more extensive options than the built in logger.
 
 ## Features
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+- Modularized logging
+- Predefined loggers to log to the terminal or a file
+- Custom logger to send log messages to a remote logging server
+- Timestamp formatting
 
-## Getting started
+## Future plans
 
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
+- Threaded logger for performance
 
 ## Usage
 
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder. 
-
+Simply using predefined logger:
 ```dart
-const like = 'sample';
+logging.start();
+...
+logging.info("info");
+logging.critical("critical");
+...
+await logging.stop()
 ```
 
-## Additional information
-
-TODO: Tell users more about the package: where to find more information, how to 
-contribute to the package, how to file issues, what response they can expect 
-from the package authors, and more.
+Or using a user-configured logger:
+```dart
+final Logger logger = Logger(
+    loggerName: "MAIN",
+    sink: FileSink(filename: "log.txt", behavior: FileSinkStartBehavior.CLEAR),
+    loggerCallback: null
+);
+logger.setFlushInterval(100);
+logger.setDateTimeFMT(DateTimeFMT.DATE);
+logger.setLoggerSinkLevel(LogLevel.ERROR);
+logger.start();
+// ...
+logger.info("info");
+logger.critical("critical");
+// ...
+await logger.stop();
+```

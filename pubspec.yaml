@@ -1,14 +1,15 @@
 name: logging_utils
-description: A starting point for Dart libraries or applications.
+description: A package for logging with more extensive options than the built in logger.
 version: 1.0.0
-# repository: https://github.com/my_org/my_repo
+repository: https://github.com/davidgmolnar-pub-dev/logging_utils
+issue_tracker: https://github.com/davidgmolnar-pub-dev/logging_utils/issues
+
+topics:
+  - debugging
+  - logging
 
 environment:
   sdk: ^3.2.5
-
-# Add regular dependencies here.
-dependencies:
-  # path: ^1.8.0
 
 dev_dependencies:
   lints: ^2.1.0
