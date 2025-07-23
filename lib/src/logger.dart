@@ -33,70 +33,55 @@ class Logger {
 
   /// Modifies the interval with which the [LoggerSink] flushes [LogEntry] instances.
   void setFlushInterval(final int intervalMs) async {
+    _sleep();
     _flushInterval = intervalMs;
     if (_isActive) {
-      await stop();
-      start();
+      _wake();
     }
   }
 
   /// Modifies the [LoggerSink] of this logger.
-  void setLoggerSink(final LoggerSink sink) async {
-    final bool wasActive = _isActive;
-    if (_isActive) {
-      await stop();
-    }
+  void setLoggerSink(final LoggerSink sink) {
+    _sleep();
     _sink = sink;
-    if (wasActive) {
-      start();
+    if (_isActive) {
+      _wake();
     }
   }
 
   /// Modifies the name of this logger in the log.
-  void setLoggerName(final String loggerName) async {
-    final bool wasActive = _isActive;
-    if (_isActive) {
-      await stop();
-    }
+  void setLoggerName(final String loggerName){
+    _sleep();
     _loggerName = loggerName;
-    if (wasActive) {
-      start();
+    if (_isActive) {
+      _wake();
     }
   }
 
   /// Modifies the [LogLevel] below which [LogEntry] instances are ignored.
-  void setLoggerSinkLevel(final LogLevel level) async {
-    final bool wasActive = _isActive;
-    if (_isActive) {
-      await stop();
-    }
+  void setLoggerSinkLevel(final LogLevel level){   
+    _sleep();
     _sinkLevel = level;
-    if (wasActive) {
-      start();
+    if (_isActive) {
+      _wake();
     }
   }
 
   /// Modifies the callback to be called when [LogEntry] instances are added
-  void setLoggerCallback(final void Function(LogEntry)? loggerCallback) async {
-    final bool wasActive = _isActive;
-    if (_isActive) {
-      await stop();
-    }
+  void setLoggerCallback(final void Function(LogEntry)? loggerCallback){
+    _sleep();
     _loggerCallback = loggerCallback;
-    if (wasActive) {
-      start();
+    if (_isActive) {
+      _wake();
     }
   }
 
   /// Modifies the time formatting in the log
-  void setDateTimeFMT(final DateTimeFMT fmt) async {
-    final bool wasActive = _isActive;
-    if (_isActive) {
-      await stop();
-    }
+  void setDateTimeFMT(final DateTimeFMT fmt){
+    _sleep();
     _fmt = fmt;
-    if (wasActive) {
-      start();
+    if (_isActive) {
+      _wake();
     }
   }
 
@@ -213,3 +198,8 @@ class Logger {
     _buffer = _buffer.skip(copy.length).toList();
   }
 }
+
+// create loggerbase
+
+// extend asynclogger + typedef logger asynclogger
+// extend threadedlogger
