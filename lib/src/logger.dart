@@ -4,6 +4,7 @@ import 'dart:isolate';
 import 'package:logging_utils/src/log_entry.dart';
 import 'package:logging_utils/src/logger_sink.dart';
 
+/// A shorthand for the AsyncLogger
 typedef Logger = AsyncLogger;
 
 /// Root logger, preconfigured to log in the terminal
@@ -32,59 +33,25 @@ abstract class _LoggerBase {
         _loggerName = loggerName;
 
   /// Modifies the [LoggerSink] of this logger.
-  void setLoggerSink(final LoggerSink sink) {
-    _sleep();
-    _sink = sink;
-    if (_isActive) {
-      _wake();
-    }
-  }
+  void setLoggerSink(final LoggerSink sink);
 
   /// Modifies the name of this logger in the log.
-  void setLoggerName(final String loggerName){
-    _sleep();
-    _loggerName = loggerName;
-    if (_isActive) {
-      _wake();
-    }
-  }
+  void setLoggerName(final String loggerName);
 
   /// Modifies the [LogLevel] below which [LogEntry] instances are ignored.
-  void setLoggerSinkLevel(final LogLevel level){   
-    _sleep();
-    _sinkLevel = level;
-    if (_isActive) {
-      _wake();
-    }
-  }
+  void setLoggerSinkLevel(final LogLevel level);
 
   /// Modifies the callback to be called when [LogEntry] instances are added
-  void setLoggerCallback(final void Function(LogEntry)? loggerCallback){
-    _sleep();
-    _loggerCallback = loggerCallback;
-    if (_isActive) {
-      _wake();
-    }
-  }
+  void setLoggerCallback(final void Function(LogEntry)? loggerCallback);
 
   /// Modifies the time formatting in the log
-  void setDateTimeFMT(final DateTimeFMT fmt){
-    _sleep();
-    _fmt = fmt;
-    if (_isActive) {
-      _wake();
-    }
-  }
+  void setDateTimeFMT(final DateTimeFMT fmt);
 
   /// Activates the [Logger]
   void start();
 
   /// Deactivates the [Logger], all as of yet unflushed [LogEntry] instances are flushed by the time this future finalizes.
   Future<void> stop();
-
-  void _sleep();
-
-  void _wake();
 
   /// Add a [LogEntry] with [LogLevel.DEBUG] level
   void debug(final String message) {
@@ -138,12 +105,41 @@ abstract class _LoggerBase {
 /// Based on assigned [LoggerSink] it can log in the terminal, to a file or to a remote through a network using [CustomSink].
 /// The [Logger] can be listened to, using the provided loggerCallback. All [LogEntry] instances above sinkLevel are flushed in batches of flushInterval apart in an async manner.
 /// Defaults: 1000 ms flushInterval, warning sinkLevel and DateTime formatting
-class AsyncLogger extends _LoggerBase{
+class AsyncLogger extends _LoggerBase {
   Timer? _timer;
   int _flushInterval = 1000;
   List<LogEntry> _buffer = [];
-  
-  AsyncLogger({required super.loggerName, required super.sink, required super.loggerCallback});
+
+  AsyncLogger(
+      {required super.loggerName,
+      required super.sink,
+      required super.loggerCallback});
+
+  @override
+  void setLoggerSink(final LoggerSink sink) {
+    _sink = sink;
+    _sink.start();
+  }
+
+  @override
+  void setLoggerName(final String loggerName) {
+    _loggerName = loggerName;
+  }
+
+  @override
+  void setLoggerSinkLevel(final LogLevel level) {
+    _sinkLevel = level;
+  }
+
+  @override
+  void setLoggerCallback(final void Function(LogEntry)? loggerCallback) {
+    _loggerCallback = loggerCallback;
+  }
+
+  @override
+  void setDateTimeFMT(final DateTimeFMT fmt) {
+    _fmt = fmt;
+  }
 
   /// Modifies the interval with which the [LoggerSink] flushes [LogEntry] instances.
   void setFlushInterval(final int intervalMs) async {
@@ -168,12 +164,10 @@ class AsyncLogger extends _LoggerBase{
     _buffer = _buffer.skip(copy.length).toList();
   }
 
-  @override
   void _sleep() {
     _timer?.cancel();
   }
 
-  @override
   void _wake() {
     if (_timer?.isActive ?? false) {
       return;
@@ -195,8 +189,8 @@ class AsyncLogger extends _LoggerBase{
     _timer =
         Timer.periodic(Duration(milliseconds: _flushInterval), ((timer) async {
       await _flush();
-    _isActive = true;
     }));
+    _isActive = true;
   }
 
   @override
@@ -230,7 +224,7 @@ class AsyncLogger extends _LoggerBase{
   }
 }
 
-class _LoggerWorker{
+class _LoggerWorker {
   Isolate? _handle;
   SendPort? _sendPort;
   ReceivePort? _receivePort;
@@ -239,8 +233,8 @@ class _LoggerWorker{
 
   _LoggerWorker();
 
-  Future<void> start(final LoggerSink sink) async{
-    if(_handle != null){
+  Future<void> start(final LoggerSink sink) async {
+    if (_handle != null) {
       return;
     }
 
@@ -249,10 +243,9 @@ class _LoggerWorker{
     _receivePort = ReceivePort();
     _receivePort!.listen(_isolateListener);
 
-    try{
+    try {
       _handle = await Isolate.spawn(_isolateMain, _receivePort!.sendPort);
-    }
-    catch(ex){
+    } catch (ex) {
       _receivePort!.close();
       _receivePort = null;
       _isolateReady = null;
@@ -265,30 +258,31 @@ class _LoggerWorker{
     _sendPort!.send(sink);
   }
 
-  void _isolateListener(final dynamic message){
-    if(message is SendPort){
+  void setLoggerSink(final LoggerSink sink) {
+    _sendPort?.send(sink);
+  }
+
+  void _isolateListener(final dynamic message) {
+    if (message is SendPort) {
       _sendPort = message;
       _isolateReady?.complete();
-    }
-    else if(message is bool && !message){
+    } else if (message is bool && !message) {
       _shutdownReady?.complete();
     }
   }
 
-  static void _isolateMain(final SendPort port){
+  static void _isolateMain(final SendPort port) {
     final ReceivePort receivePort = ReceivePort();
     port.send(receivePort.sendPort);
 
     LoggerSink? sink;
 
     receivePort.listen((final dynamic message) async {
-      if(message is LoggerSink){
+      if (message is LoggerSink) {
         sink = message;
-      }
-      else if (message is List) {
-        sink?.flush(message[0], message[1], message[2]);
-      }
-      else if(message is bool && !message){
+      } else if (message is List) {
+        sink?.flushSync(message[0], message[1], message[2]);
+      } else if (message is bool && !message) {
         port.send(false);
         receivePort.close();
       }
@@ -296,7 +290,7 @@ class _LoggerWorker{
   }
 
   Future<void> stop() async {
-    if(_handle == null){
+    if (_handle == null) {
       return;
     }
 
@@ -304,14 +298,15 @@ class _LoggerWorker{
     await _shutdownReady!.future;
     _handle!.kill(priority: 0);
     _handle = null;
-    
+
     _receivePort?.close();
-    
+
     _receivePort = null;
     _sendPort == null;
   }
 
-  void flush(final List<LogEntry> entries, final String loggerName, final DateTimeFMT fmt){
+  void flush(final List<LogEntry> entries, final String loggerName,
+      final DateTimeFMT fmt) {
     _sendPort!.send([entries, loggerName, fmt]);
   }
 }
@@ -321,19 +316,39 @@ class _LoggerWorker{
 /// Based on assigned [LoggerSink] it can log in the terminal, to a file or to a remote through a network using [CustomSink].
 /// The [Logger] can be listened to, using the provided loggerCallback. All [LogEntry] instances above sinkLevel are flushed immediately in an isolate.
 /// Defaults: warning sinkLevel and DateTime formatting
-class ThreadedLogger extends _LoggerBase{
+class ThreadedLogger extends _LoggerBase {
   final _LoggerWorker _worker = _LoggerWorker();
 
-  ThreadedLogger({required super.loggerName, required super.sink, required super.loggerCallback});
+  ThreadedLogger(
+      {required super.loggerName,
+      required super.sink,
+      required super.loggerCallback});
 
   @override
-  Future<void> _sleep() async {
-    await _worker.stop();
+  Future<void> setLoggerSink(final LoggerSink sink) async {
+    _sink = sink;
+    _sink.start();
+    _worker.setLoggerSink(_sink);
   }
 
   @override
-  void _wake() {
-    _worker.start(_sink);
+  void setLoggerName(final String loggerName) {
+    _loggerName = loggerName;
+  }
+
+  @override
+  void setLoggerSinkLevel(final LogLevel level) {
+    _sinkLevel = level;
+  }
+
+  @override
+  void setLoggerCallback(final void Function(LogEntry)? loggerCallback) {
+    _loggerCallback = loggerCallback;
+  }
+
+  @override
+  void setDateTimeFMT(final DateTimeFMT fmt) {
+    _fmt = fmt;
   }
 
   @override
@@ -342,6 +357,7 @@ class ThreadedLogger extends _LoggerBase{
       return;
     }
 
+    _sink.start();
     await _worker.start(_sink);
     _isActive = true;
   }
@@ -353,22 +369,29 @@ class ThreadedLogger extends _LoggerBase{
     }
     _isActive = false;
     await _worker.stop();
-  }  
-  
+  }
+
   @override
-  void addAll(final List<LogEntry> entries) {
-    if (entries.isNotEmpty) {
-      _wake();
+  void addAll(final List<LogEntry> entries) async {
+    if (!_isActive ||
+        entries.isEmpty ||
+        !entries.any((e) => e.level.index >= _sinkLevel.index)) {
+      return;
     }
     if (_loggerCallback != null) {
       entries.forEach(_loggerCallback!);
     }
-    _worker.flush(entries, _loggerName, _fmt);
+    _worker.flush(
+        entries.where((e) => e.level.index >= _sinkLevel.index).toList(),
+        _loggerName,
+        _fmt);
   }
 
   @override
-  void add(final LogEntry entry) {
-    _wake();
+  void add(final LogEntry entry) async {
+    if (!_isActive || entry.level.index < _sinkLevel.index) {
+      return;
+    }
     if (_loggerCallback != null) {
       _loggerCallback!(entry);
     }

@@ -14,6 +14,10 @@ enum FileSinkStartBehavior {
 abstract class LoggerSink {
   Future<void> flush(final List<LogEntry> entries, final String loggerName,
       final DateTimeFMT fmt);
+
+  void flushSync(final List<LogEntry> entries, final String loggerName,
+      final DateTimeFMT fmt);
+
   void start();
 }
 
@@ -25,6 +29,11 @@ class ConsoleSink extends LoggerSink {
       final DateTimeFMT fmt) async {
     print(entries.map((e) => e.asString(loggerName, fmt)).join("\n"));
   }
+
+  /// Synchronously flushes all received [LogEntry] instances to the terminal
+  @override
+  void flushSync(List<LogEntry> entries, String loggerName, DateTimeFMT fmt) =>
+      flush(entries, loggerName, fmt);
 
   /// No startup behavior for a [ConsoleSink]
   @override
@@ -52,8 +61,23 @@ class FileSink extends LoggerSink {
 
     final RandomAccessFile access = await logFile.open(mode: FileMode.append);
     await access.writeString(
-        entries.map((e) => e.asString(loggerName, fmt)).join("\n"));
+        entries.map((e) => '${e.asString(loggerName, fmt)}\n').join());
     await access.close();
+  }
+
+  /// Synchronously flushes all received [LogEntry] instances to the logfile
+  @override
+  void flushSync(final List<LogEntry> entries, final String loggerName,
+      final DateTimeFMT fmt) async {
+    final File logFile = File(filename);
+    if (!logFile.existsSync()) {
+      logFile.createSync(recursive: true);
+    }
+
+    logFile.writeAsStringSync(
+        entries.map((e) => '${e.asString(loggerName, fmt)}\n').join(),
+        mode: FileMode.append,
+        flush: true);
   }
 
   /// Depending on [behavior] it clears the logfile if it already exists
@@ -88,12 +112,27 @@ class ConsoleAndFileSink extends LoggerSink {
     }
 
     final String buf =
-        entries.map((e) => e.asString(loggerName, fmt)).join("\n");
+        entries.map((e) => '${e.asString(loggerName, fmt)}\n').join();
     print(buf);
 
     final RandomAccessFile access = await logFile.open(mode: FileMode.append);
     await access.writeString(buf);
     await access.close();
+  }
+
+  /// Synchronously flushes all received [LogEntry] instances to the logfile and the terminal
+  @override
+  void flushSync(final List<LogEntry> entries, final String loggerName,
+      final DateTimeFMT fmt) async {
+    final File logFile = File(filename);
+    if (!logFile.existsSync()) {
+      logFile.createSync(recursive: true);
+    }
+
+    logFile.writeAsStringSync(
+        entries.map((e) => '${e.asString(loggerName, fmt)}\n').join(),
+        mode: FileMode.append,
+        flush: true);
   }
 
   /// Depending on [behavior] it clears the logfile if it already exists
@@ -114,15 +153,27 @@ class CustomSink extends LoggerSink {
   final void Function() startImpl;
 
   /// User defined flush behavior
-  final void Function(List<LogEntry>, String, DateTimeFMT) flushImpl;
+  final Future<void> Function(List<LogEntry>, String, DateTimeFMT) flushImpl;
 
-  CustomSink({required this.startImpl, required this.flushImpl});
+  /// User defined flush behavior
+  final void Function(List<LogEntry>, String, DateTimeFMT) flushImplSync;
+
+  CustomSink(
+      {required this.startImpl,
+      required this.flushImpl,
+      required this.flushImplSync});
 
   /// Flushes all received [LogEntry] instances using the user supplied flush behavior
   @override
   Future<void> flush(final List<LogEntry> entries, final String loggerName,
       final DateTimeFMT fmt) async {
     flushImpl(entries, loggerName, fmt);
+  }
+
+  /// Flushes all received [LogEntry] instances using the user supplied synchronous flush behavior
+  @override
+  void flushSync(List<LogEntry> entries, String loggerName, DateTimeFMT fmt) {
+    flushImplSync(entries, loggerName, fmt);
   }
 
   /// Runs the user supplied startup behavior

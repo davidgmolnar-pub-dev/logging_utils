@@ -1,3 +1,4 @@
+/// A package for logging with more extensive options than the built in logger.
 library;
 
 export 'src/logger.dart';

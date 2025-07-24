@@ -9,10 +9,6 @@ A package for logging with more extensive options than the built in logger.
 - Custom logger to send log messages to a remote logging server
 - Timestamp formatting
 
-## Future plans
-
-- Threaded logger for performance
-
 ## Usage
 
 Simply using predefined logger:
@@ -42,3 +38,24 @@ logger.critical("critical");
 // ...
 await logger.stop();
 ```
+
+Same available with a threaded logger:
+```dart
+ThreadedLogger tlogger = ThreadedLogger(loggerName: "MAIN", sink: ConsoleSink(), loggerCallback: null);
+await tlogger.start();
+// ...
+tlogger.warning("warning");
+tlogger.critical("critical");
+// ...
+tlogger.setLoggerSink(FileSink(filename: "a.log", behavior: FileSinkStartBehavior.CLEAR));
+tlogger.setDateTimeFMT(DateTimeFMT.TS_US);
+tlogger.setLoggerName("CHILD");
+tlogger.setLoggerSinkLevel(LogLevel.ERROR);
+// ...
+tlogger.info("info");
+tlogger.critical("critical");
+// ...
+await tlogger.stop();
+```
+
+On-the-fly reconfiguration possible for both the AsyncLogger and ThreadedLogger options.
